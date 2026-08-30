@@ -7,6 +7,7 @@ use App\Http\Requests\Recipe\RecipeRequest;
 use App\Http\Resources\RecipeResource;
 use App\Models\Recipe;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,7 @@ class RecipeController extends Controller
         $recipes = Recipe::query()
             ->with(['user', 'categories', 'images'])
             ->withCount(['favorites', 'comments'])
+            ->withIsFavorited($request->user('sanctum'))
             ->when($request->validated('keyword'), fn ($query, $keyword) => $query->where('title', 'like', "%{$keyword}%"))
             ->when($request->validated('ingredient'), fn ($query, $ingredient) => $query->whereHas(
                 'ingredients',
@@ -36,10 +38,17 @@ class RecipeController extends Controller
         return RecipeResource::collection($recipes);
     }
 
-    public function show(Recipe $recipe): RecipeResource
+    public function show(Request $request, Recipe $recipe): RecipeResource
     {
         $recipe->load(['user', 'ingredients', 'steps', 'images', 'categories'])
             ->loadCount(['favorites', 'comments']);
+
+        if ($user = $request->user('sanctum')) {
+            $recipe->setAttribute(
+                'is_favorited',
+                $recipe->favorites()->where('user_id', $user->id)->exists(),
+            );
+        }
 
         return new RecipeResource($recipe);
     }
