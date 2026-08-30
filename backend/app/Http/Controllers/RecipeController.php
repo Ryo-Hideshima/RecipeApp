@@ -2,14 +2,40 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Recipe\ListRecipeRequest;
 use App\Http\Requests\Recipe\RecipeRequest;
 use App\Http\Resources\RecipeResource;
 use App\Models\Recipe;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 
 class RecipeController extends Controller
 {
+    /**
+     * 全レシピを新着順で一覧。キーワード（タイトル）・材料名・カテゴリで絞り込む。
+     */
+    public function index(ListRecipeRequest $request): AnonymousResourceCollection
+    {
+        $recipes = Recipe::query()
+            ->with(['user', 'categories', 'images'])
+            ->withCount(['favorites', 'comments'])
+            ->when($request->validated('keyword'), fn ($query, $keyword) => $query->where('title', 'like', "%{$keyword}%"))
+            ->when($request->validated('ingredient'), fn ($query, $ingredient) => $query->whereHas(
+                'ingredients',
+                fn ($ingredientQuery) => $ingredientQuery->where('name', 'like', "%{$ingredient}%"),
+            ))
+            ->when($request->validated('category_ids'), fn ($query, $categoryIds) => $query->whereHas(
+                'categories',
+                fn ($categoryQuery) => $categoryQuery->whereIn('categories.id', $categoryIds),
+            ))
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
+
+        return RecipeResource::collection($recipes);
+    }
+
     public function show(Recipe $recipe): RecipeResource
     {
         $recipe->load(['user', 'ingredients', 'steps', 'images', 'categories'])
