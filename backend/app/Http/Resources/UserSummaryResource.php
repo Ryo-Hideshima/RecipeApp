@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\User;
+use App\Support\MediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,6 +23,7 @@ class UserSummaryResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'avatar_path' => $this->avatar_path,
+            'avatar_url' => MediaStorage::url($this->avatar_path),
             'following_count' => $this->whenCounted('following'),
             'followers_count' => $this->whenCounted('followers'),
             'is_following' => $this->when(

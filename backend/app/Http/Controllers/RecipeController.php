@@ -6,6 +6,7 @@ use App\Http\Requests\Recipe\ListRecipeRequest;
 use App\Http\Requests\Recipe\RecipeRequest;
 use App\Http\Resources\RecipeResource;
 use App\Models\Recipe;
+use App\Support\MediaStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -89,6 +90,11 @@ class RecipeController extends Controller
     public function destroy(Recipe $recipe): JsonResponse
     {
         $this->authorize('delete', $recipe);
+
+        // DBの関連レコードはFKのカスケードで消えるが、ディスク上の画像は明示的に削除する
+        foreach ($recipe->images as $image) {
+            MediaStorage::delete($image->image_path);
+        }
 
         $recipe->delete();
 
