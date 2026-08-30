@@ -5,7 +5,9 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\FollowController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecipeController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -31,6 +33,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/recipes/{recipe}/comments', [CommentController::class, 'store']);
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
 
+    Route::patch('/profile', [ProfileController::class, 'update']);
+
+    Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/{user}', [UserController::class, 'show']);
+    Route::get('/users/{user}/recipes', [UserController::class, 'recipes']);
     Route::get('/users/{user}/following', [FollowController::class, 'following']);
     Route::get('/users/{user}/followers', [FollowController::class, 'followers']);
     Route::post('/users/{user}/follow', [FollowController::class, 'store']);
