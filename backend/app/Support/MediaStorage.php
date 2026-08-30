@@ -19,6 +19,7 @@ class MediaStorage
 
     /**
      * アップロードファイルを指定ディレクトリに保存し、保存された相対パスを返す。
+     * 公開はディスク側で担保する（local: public ディスク / S3: バケットポリシー）。
      */
     public static function store(UploadedFile $file, string $directory): string
     {

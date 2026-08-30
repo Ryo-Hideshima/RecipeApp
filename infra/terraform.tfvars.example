@@ -1,0 +1,4 @@
+# このファイルは任意。デフォルトを変えたいときだけ terraform.tfvars を作る。
+#
+# region  = "ap-northeast-1"
+# project = "recipeapp"
