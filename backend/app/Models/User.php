@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -72,5 +73,16 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(User::class, 'follows', 'followee_id', 'follower_id')
             ->withPivot('created_at');
+    }
+
+    /**
+     * 指定ユーザーがこのユーザーをフォロー済みかを is_following として付与する。
+     * 未ログイン（null）の場合は何もしない。
+     */
+    public function scopeWithIsFollowedBy(Builder $query, ?User $user): void
+    {
+        $query->when($user, fn (Builder $q) => $q->withExists([
+            'followers as is_following' => fn ($followerQuery) => $followerQuery->where('follower_id', $user->id),
+        ]));
     }
 }

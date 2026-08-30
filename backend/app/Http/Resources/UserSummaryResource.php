@@ -22,6 +22,12 @@ class UserSummaryResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'avatar_path' => $this->avatar_path,
+            'following_count' => $this->whenCounted('following'),
+            'followers_count' => $this->whenCounted('followers'),
+            'is_following' => $this->when(
+                ! is_null($this->is_following),
+                fn () => (bool) $this->is_following,
+            ),
         ];
     }
 }
