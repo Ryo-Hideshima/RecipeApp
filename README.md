@@ -9,6 +9,8 @@
 
 **https://d3esqm93yvbtbp.cloudfront.net**
 
+📹 デモ動画: [`docs/media/demo.mp4`](docs/media/demo.mp4)
+
 すぐ試せるデモアカウント（パスワードは全員 `password123`）:
 
 | メールアドレス | 表示名 |
