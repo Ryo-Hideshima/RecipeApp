@@ -18,8 +18,7 @@
         </include>
     </source>
     <php>
-        <!-- PCRE JIT は ARM64 + 一部 PHP ビルドでテスト実行中にクラッシュすることがあるため無効化 -->
-        <ini name="pcre.jit" value="0"/>
+        <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
