@@ -178,7 +178,9 @@ export function RecipeForm({ initialRecipe }: { initialRecipe?: Recipe }) {
             multiple
             hidden
             onChange={(e) => {
-              setNewFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])]);
+              // files を先に取り出す（updater 内で参照すると value="" 後に空になる）
+              const picked = Array.from(e.target.files ?? []);
+              setNewFiles((prev) => [...prev, ...picked]);
               e.target.value = "";
             }}
           />
