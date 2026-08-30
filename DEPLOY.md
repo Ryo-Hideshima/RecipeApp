@@ -1,142 +1,125 @@
-# デプロイ手順
+# デプロイ手順 (AWS)
 
-本番構成:
+すべて AWS。IaC は Terraform (`infra/`)。
 
-| レイヤー | サービス | 補足 |
-|----------|----------|------|
-| フロントエンド | **Vercel** | `frontend/` を Next.js プロジェクトとしてデプロイ |
-| バックエンド | **Laravel Cloud** | `backend/` を Laravel アプリとしてデプロイ |
-| データベース | **Laravel Cloud の MySQL** | アプリにアタッチ |
-| 画像ストレージ | **Laravel Cloud のオブジェクトストレージ**（S3 互換） | `MEDIA_DISK=s3` |
+```
+                    ┌───────────── CloudFront (HTTPS, *.cloudfront.net) ─────────────┐
+   ブラウザ ──HTTPS──▶                       │                                        │
+                    └──HTTP──▶ ALB ──┬── /api/*, /up, /storage/* ──▶ ECS: backend (Laravel, Fargate)
+                                     └── それ以外 ──────────────────▶ ECS: frontend (Next.js, Fargate)
+                                                                         │
+                              RDS MySQL (t3.micro)  ◀──────────────────┘
+                              S3 (レシピ写真・アイコン, 公開読み取り)
+```
 
-両サービスとも GitHub 連携で `main` への push を自動デプロイする。CI（GitHub Actions）が緑になってからマージ → 自動デプロイ、という流れ。
+| リソース | 用途 |
+|----------|------|
+| CloudFront | ビューワー HTTPS 終端。キャッシュ無効 (API/SSR) |
+| ALB | パスベースルーティング (`/api/*` → backend, それ以外 → frontend) |
+| ECS Fargate ×2 | backend (Laravel, ポート8080) / frontend (Next.js standalone, ポート3000)。ARM64 |
+| RDS MySQL | `db.t3.micro`・初年は無料枠 |
+| S3 | 画像。バケットポリシーで `s3:GetObject` を公開 |
+| ECR ×2 | backend / frontend のイメージ |
+
+**フロントとバックエンドは CloudFront で同一オリジン**になるため、`NEXT_PUBLIC_API_URL` は
+`https://<cloudfront>/api`、CORS 設定は不要。
 
 ---
 
 ## 前提
 
-- リポジトリが GitHub にある（済み: `Ryo-Hideshima/RecipeApp`）
-- [Vercel](https://vercel.com) アカウント
-- [Laravel Cloud](https://cloud.laravel.com) アカウント
+- `aws` CLI が認証済み（`aws sts get-caller-identity` が通る）
+- Terraform 1.6+
+- Docker が起動している
+- 必要な IAM 権限: ECS / ECR / EC2(VPC) / RDS / S3 / CloudFront / IAM / CloudWatch Logs / ELB
 
 ---
 
-## 1. バックエンド（Laravel Cloud）
-
-### 1-1. アプリ作成
-
-1. Laravel Cloud で **Create Application** → GitHub リポジトリ `RecipeApp` を選択
-2. **Application path** に `backend` を指定（モノレポのため）
-3. PHP バージョン: 8.4 / リージョンは任意
-
-### 1-2. データベース
-
-1. アプリの **Database** で **MySQL** を作成しアタッチ
-2. `DB_*` 環境変数は Laravel Cloud が自動注入する（手動設定不要）
-
-### 1-3. オブジェクトストレージ（画像）
-
-Laravel Cloud コンテナのファイルシステムはデプロイごとに揮発するため、画像は必ず外部ストレージへ。
-
-1. アプリの **Storage** で S3 互換バケットを作成
-2. 発行された認証情報を下記の環境変数に設定
-
-### 1-4. 環境変数
-
-| 変数 | 値 |
-|------|----|
-| `APP_NAME` | `Recipe` |
-| `APP_ENV` | `production` |
-| `APP_DEBUG` | `false` |
-| `APP_KEY` | Laravel Cloud が生成（**Generate App Key**） |
-| `APP_URL` | 発行されたバックエンドの URL（例 `https://recipeapp-xxxx.laravel.cloud`） |
-| `MEDIA_DISK` | `s3` |
-| `AWS_ACCESS_KEY_ID` | ストレージのキー |
-| `AWS_SECRET_ACCESS_KEY` | ストレージのシークレット |
-| `AWS_DEFAULT_REGION` | バケットのリージョン |
-| `AWS_BUCKET` | バケット名 |
-| `AWS_ENDPOINT` | S3 互換エンドポイント URL |
-| `AWS_URL` | 公開 URL のベース（例 `https://<bucket>.<endpoint>`） |
-| `AWS_USE_PATH_STYLE_ENDPOINT` | プロバイダに応じて `true` / `false` |
-| `SESSION_DRIVER` | `database` |
-| `CACHE_STORE` | `database` |
-| `QUEUE_CONNECTION` | `database` |
-| `FRONTEND_URL` | Vercel の URL（CORS を絞る場合に使用。未設定なら全オリジン許可のまま） |
-
-> トークンベース認証（Sanctum の Personal Access Token）なので Cookie/セッションのクロスドメイン設定は不要。`SANCTUM_STATEFUL_DOMAINS` も不要。
-
-### 1-5. デプロイコマンド
-
-アプリの **Deployment** 設定の deploy スクリプトに以下を含める:
+## 1. インフラ構築 (Terraform)
 
 ```sh
-composer install --no-dev --optimize-autoloader
-php artisan migrate --force
-php artisan db:seed --force        # カテゴリマスタ投入（冪等・本番では CategorySeeder のみ実行）
-php artisan config:cache
-php artisan route:cache
-php artisan event:cache
+cd infra
+terraform init
+terraform plan       # 作成されるリソースを確認
+terraform apply
 ```
 
-### 1-6. デプロイ
+- RDS の作成に 5〜10 分ほどかかる
+- `apply` 時点では ECS サービスはイメージ未 push のためタスク 0 で待機する（正常）
 
-**Deploy** を実行。完了後、`https://<backend-url>/api/categories` が JSON を返せば OK。
+主な出力:
 
----
+```sh
+terraform output site_url        # アプリの URL
+terraform output api_url          # API のベース URL
+terraform output -raw db_password # RDS パスワード (sensitive)
+```
 
-## 2. フロントエンド（Vercel）
+## 2. イメージのビルド & デプロイ
 
-### 2-1. プロジェクト作成
+```sh
+cd ..
+./scripts/deploy.sh
+```
 
-1. Vercel で **Add New… → Project** → `RecipeApp` を Import
-2. **Root Directory** に `frontend` を指定
-3. Framework Preset は **Next.js**（自動検出）
+このスクリプトが行うこと:
 
-### 2-2. 環境変数
+1. ECR にログイン
+2. `backend/` を `serversideup/php:8.4-fpm-nginx` ベースでビルド → ECR へ push
+3. `frontend/` を Next.js standalone でビルド（`NEXT_PUBLIC_API_URL` を `terraform output` から埋め込み）→ ECR へ push
+4. 両 ECS サービスを `--force-new-deployment` でロールアウト
+5. `aws ecs wait services-stable` で安定まで待機
 
-| 変数 | 値 |
-|------|----|
-| `NEXT_PUBLIC_API_URL` | `https://<backend-url>/api` （末尾の `/api` まで含める） |
-
-> `NEXT_PUBLIC_` はビルド時にバンドルへ埋め込まれる。変更したら再デプロイが必要。
-
-### 2-3. デプロイ
-
-**Deploy** を実行。完了後、トップページが `/recipes` にリダイレクトされ、レシピ一覧が表示されれば OK。
-
----
+backend コンテナは起動時に `php artisan migrate --force` と `db:seed --force`（カテゴリマスタ）を実行する。
+バックエンドサービスは常時タスク 1 個構成（`deployment_maximum_percent = 100`）なのでマイグレーションは競合しない。
 
 ## 3. 動作確認
 
-1. `/register` で新規登録 → レシピ一覧へ
-2. `/recipes/new` でレシピ投稿（画像添付） → 詳細で画像が表示される（= オブジェクトストレージ連携 OK）
-3. お気に入り・コメント・フォロー・ユーザー検索
-
----
-
-## 4. 以降の更新
-
-`main` に push（PR マージ）すると Vercel / Laravel Cloud が自動で再デプロイする。
-バックエンドのマイグレーションは deploy スクリプトの `migrate --force` で毎回適用される。
-
----
-
-## 5. CORS を絞る場合（任意）
-
-デフォルトでは `api/*` が全オリジンを許可する。フロントの URL のみに制限したい場合は
-`backend/config/cors.php` を作成:
-
-```php
-<?php
-
-return [
-    'paths' => ['api/*'],
-    'allowed_methods' => ['*'],
-    'allowed_origins' => array_filter([env('FRONTEND_URL')]),
-    'allowed_origins_patterns' => ['#^https://.*\.vercel\.app$#'],
-    'allowed_headers' => ['*'],
-    'exposed_headers' => [],
-    'max_age' => 0,
-    'supports_credentials' => false,
-];
+```sh
+open "$(terraform -chdir=infra output -raw site_url)"
 ```
+
+- `/register` で新規登録 → レシピ一覧へ
+- レシピ投稿で画像を添付 → 詳細で画像が表示される（S3 連携の確認）
+
+---
+
+## 更新デプロイ
+
+コードを変更したら再度:
+
+```sh
+./scripts/deploy.sh
+```
+
+インフラ定義（`infra/`）を変更したら:
+
+```sh
+cd infra && terraform apply
+```
+
+---
+
+## 片付け
+
+```sh
+cd infra && terraform destroy
+```
+
+`force_destroy = true` を設定してあるため S3 / ECR にオブジェクトが残っていても削除される。
+RDS は `skip_final_snapshot = true`。
+
+---
+
+## コスト目安（東京リージョン・概算）
+
+| | 月額 |
+|---|---|
+| ECS Fargate (0.25 vCPU / 0.5GB × 2 タスク常時) | 約 $18 |
+| ALB | 約 $18 + LCU |
+| RDS `db.t3.micro` | 初年 $0（無料枠 750h）→ 以降 約 $13 |
+| CloudFront / S3 / ECR / CloudWatch | 数百円（低トラフィック時） |
+| **合計** | **初年 約 $40 / 月、以降 約 $55 / 月** |
+
+停止したいときは `terraform destroy`、または ECS サービスの `desired_count` を 0 にして
+RDS を停止する。
