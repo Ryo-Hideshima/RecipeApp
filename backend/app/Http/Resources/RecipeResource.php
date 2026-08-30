@@ -35,6 +35,10 @@ class RecipeResource extends JsonResource
             ])),
             'favorites_count' => $this->whenCounted('favorites'),
             'comments_count' => $this->whenCounted('comments'),
+            'is_favorited' => $this->when(
+                ! is_null($this->is_favorited),
+                fn () => (bool) $this->is_favorited,
+            ),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
