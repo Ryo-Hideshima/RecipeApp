@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\User;
+use App\Support\MediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,6 +23,7 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'bio' => $this->bio,
             'avatar_path' => $this->avatar_path,
+            'avatar_url' => MediaStorage::url($this->avatar_path),
             'created_at' => $this->created_at,
         ];
     }

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Recipe;
+use App\Support\MediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,7 +29,11 @@ class RecipeResource extends JsonResource
                 'step_number' => $s->step_number,
                 'description' => $s->description,
             ])),
-            'images' => $this->whenLoaded('images', fn () => $this->images->pluck('image_path')),
+            'images' => $this->whenLoaded('images', fn () => $this->images->map(fn ($image) => [
+                'id' => $image->id,
+                'path' => $image->image_path,
+                'url' => MediaStorage::url($image->image_path),
+            ])),
             'categories' => $this->whenLoaded('categories', fn () => $this->categories->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
