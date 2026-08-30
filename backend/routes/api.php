@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\FollowController;
 use App\Http\Controllers\RecipeController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,4 +30,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/recipes/{recipe}/comments', [CommentController::class, 'store']);
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
+
+    Route::get('/users/{user}/following', [FollowController::class, 'following']);
+    Route::get('/users/{user}/followers', [FollowController::class, 'followers']);
+    Route::post('/users/{user}/follow', [FollowController::class, 'store']);
+    Route::delete('/users/{user}/follow', [FollowController::class, 'destroy']);
 });
