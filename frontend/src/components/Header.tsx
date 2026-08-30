@@ -19,8 +19,9 @@ export function Header() {
     href === "/recipes" ? pathname === "/" || pathname.startsWith("/recipes") : pathname.startsWith(href);
 
   async function handleLogout() {
-    await logout();
+    // 認証必須ページからのログアウトで /login へ弾かれないよう、先に公開ページへ移動する
     router.push("/recipes");
+    await logout();
   }
 
   return (

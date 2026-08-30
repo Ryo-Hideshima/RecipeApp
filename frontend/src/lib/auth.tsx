@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, setToken } from "./api";
+import { api, getToken, setToken } from "./api";
 import type { AuthResponse, AuthUser } from "./types";
 
 interface AuthContextValue {
@@ -32,6 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // トークンが無ければ API を叩かずに未ログイン確定
+      if (!getToken()) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
       try {
         const me = await api.get<{ data: AuthUser }>("/user");
         if (!cancelled) setUserState(me.data);
