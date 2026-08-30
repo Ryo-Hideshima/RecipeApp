@@ -19,10 +19,11 @@ class MediaStorage
 
     /**
      * アップロードファイルを指定ディレクトリに保存し、保存された相対パスを返す。
+     * S3 でも URL 公開できるよう public 可視性で保存する。
      */
     public static function store(UploadedFile $file, string $directory): string
     {
-        return self::disk()->putFile($directory, $file);
+        return self::disk()->putFile($directory, $file, 'public');
     }
 
     public static function delete(?string $path): void
